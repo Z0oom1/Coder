@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coder v9 - Pro Color Picker</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ext-language_tools.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/monolith.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
+
+    <style>
+        /* --- Variáveis de Sistema --- */
+        :root {
+            /* Default (Dark Modern) */
+            --bg-app: #1e1e1e;
+            --bg-sidebar: #252526;
+            --bg-activity: #333333;
+            --accent: #007acc;
+            --text-main: #cccccc;
+            --text-muted: #858585;
+            --border: #3e3e42;
+            --hover: #2a2d2e;
+            --run-color: #42b983;
+            --stop-color: #ff5555;
+            --scroll-thumb: #464646;
+            --glass: rgba(20, 20, 20, 0.85);
+            --font-ui: 'Segoe UI', Inter, sans-serif;
+        }
+
+        /* TEMA: Dracula */
+        body.theme-dracula { --bg-app: #282a36; --bg-sidebar: #21222c; --accent: #ff79c6; --text-main: #f8f8f2; --scroll-thumb: #6272a4; }
+        /* TEMA: Cyberpunk */
+        body.theme-cyber { --bg-app: #0b0c15; --bg-sidebar: #13141f; --accent: #00f3ff; --run-color: #ff0055; --text-main: #e0e0e0; --scroll-thumb: #005f63; }
+        /* TEMA: GitHub Light */
+        body.theme-light { --bg-app: #ffffff; --bg-sidebar: #f3f3f3; --accent: #0366d6; --text-main: #24292e; --border: #e1e4e8; --hover: #e8e8e8; --scroll-thumb: #c1c1c1; --glass: rgba(255, 255, 255, 0.8); }
+        /* TEMA: Nord */
+        body.theme-nord { --bg-app: #2e3440; --bg-sidebar: #242933; --accent: #88c0d0; --text-main: #d8dee9; --border: #434c5e; --scroll-thumb: #4c566a; --run-color: #a3be8c; }
+        /* TEMA: Matrix */
+        body.theme-matrix { --bg-app: #000000; --bg-sidebar: #0a0a0a; --bg-activity: #050505; --accent: #00ff00; --text-main: #00ff00; --text-muted: #008f00; --border: #1a1a1a; --run-color: #00ff00; --scroll-thumb: #003300; }
+
+        * { box-sizing: border-box; outline: none; user-select: none; }
+        body {
+            margin: 0; padding: 0; background: var(--bg-app); color: var(--text-main);
+            font-family: var(--font-ui); height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* --- SCROLLBARS --- */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
+        ::-webkit-scrollbar-corner { background: transparent; }
+
+        /* --- Layout --- */
+        #workbench { display: flex; flex: 1; height: calc(100% - 25px); position: relative; }
+        
+        #activity-bar {
+            width: 50px; background: var(--bg-activity); padding-top: 15px; z-index: 10;
+            display: flex; flex-direction: column; align-items: center; box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+        }
+        .act-icon {
+            font-size: 22px; color: var(--text-muted); margin-bottom: 25px; cursor: pointer;
+            transition: 0.2s; position: relative; opacity: 0.7;
+        }
+        .act-icon:hover { opacity: 1; color: var(--text-main); transform: scale(1.1); }
+        .act-icon.active { opacity: 1; color: var(--accent); }
+        .act-icon.active::before { content: ''; position: absolute; left: -15px; height: 100%; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0; }
+
+        #sidebar {
+            width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; transition: width 0.3s;
+        }
+        .sidebar-view { display: none; flex: 1; flex-direction: column; animation: fadeIn 0.3s; }
+        .sidebar-view.active { display: flex; }
+        
+        .sb-header {
+            padding: 15px; font-size: 11px; font-weight: bold; letter-spacing: 1px; color: var(--text-muted);
+            text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;
+        }
+        .file-entry {
+            padding: 6px 15px; cursor: pointer; display: flex; align-items: center; font-size: 13px;
+            color: var(--text-main); border-left: 2px solid transparent; transition: 0.1s;
+        }
+        .file-entry:hover { background: var(--hover); }
+        .file-entry.active { background: var(--hover); border-left-color: var(--accent); color: var(--accent); }
+        
+        /* Ícones */
+        .fa-html5 { color: #e34c26; }
+        .fa-css3-alt { color: #264de4; }
+        .fa-js { color: #f7df1e; }
+        .fa-python { color: #306998; }
+        .fa-file-code { color: #eebb27; } 
+        .fa-file-lines { color: var(--text-muted); }
+
+        /* Config UI */
+        .config-block { padding: 15px; border-bottom: 1px solid var(--border); }
+        .config-title { font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 10px; display: block; text-transform: uppercase;}
+        .custom-select {
+            width: 100%; padding: 8px; background: var(--bg-app); border: 1px solid var(--border);
+            color: var(--text-main); border-radius: 4px; font-family: var(--font-ui); cursor: pointer; margin-bottom: 10px;
+        }
+        .custom-select:focus { border-color: var(--accent); }
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
+        .toggle-switch { position: relative; width: 34px; height: 18px; display: inline-block; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        /* Main Area */
+        #main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        
+        #tabs-bar { height: 40px; background: var(--bg-sidebar); display: flex; align-items: center; border-bottom: 1px solid var(--border); }
+        .tab {
+            height: 100%; padding: 0 15px; display: flex; align-items: center; cursor: pointer;
+            font-size: 13px; color: var(--text-muted); border-right: 1px solid var(--border);
+            position: relative; overflow: hidden;
+        }
+        .tab.active { background: var(--bg-app); color: var(--text-main); border-top: 2px solid var(--accent); }
+        .tab.active::after { content:''; position:absolute; bottom:0; left:0; width:100%; height:1px; background: var(--bg-app); }
+        
+        /* BOTÃO RUN / STOP */
+        .btn-run {
+            margin-left: auto; margin-right: 10px; background: transparent; color: var(--run-color);
+            border: 1px solid var(--run-color); padding: 4px 15px; border-radius: 20px;
+            font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px;
+            transition: all 0.2s;
+        }
+        /* Run Hover: Fundo Verde, Texto Branco */
+        .btn-run:hover { 
+            background: var(--run-color); 
+            color: white !important; 
+            box-shadow: 0 0 12px var(--run-color); 
+            transform: translateY(-1px); 
+        }
+
+        /* Estado Stop (quando run-mode está ativo) */
+        body.run-mode .btn-run {
+            color: var(--stop-color);
+            border-color: var(--stop-color);
+        }
+        /* Stop Hover: Fundo Vermelho, Texto Branco */
+        body.run-mode .btn-run:hover {
+            background: var(--stop-color);
+            color: white !important;
+            box-shadow: 0 0 12px var(--stop-color);
+        }
+
+        /* Split Screen */
+        #split-container { display: flex; flex: 1; position: relative; }
+        #editor-wrapper { flex: 1; position: relative; transition: width 0.3s; }
+        #ace-editor { position: absolute; top:0; bottom:0; left:0; right:0; }
+        
+        /* Color Chips Overlay */
+        .color-marker {
+            position: absolute; width: 12px; height: 12px; border: 1px solid #fff; 
+            z-index: 50; cursor: pointer; border-radius: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        .color-marker:hover { transform: scale(1.4); z-index: 55; border-color: var(--accent); }
+
+        #preview-wrapper {
+            width: 0; opacity: 0; display: flex; flex-direction: column; background: #111;
+            transition: all 0.4s cubic-bezier(0.2, 0.9, 0.2, 1); border-left: 1px solid var(--border);
+        }
+        body.run-mode #editor-wrapper { flex: none; width: 50%; }
+        body.run-mode #preview-wrapper { width: 50%; opacity: 1; }
+
+        /* Device Simulator */
+        .device-stage { 
+            flex: 1; background: #0e0e0e; 
+            display: flex; justify-content: center; align-items: center;
+            padding: 20px; overflow: hidden;
+            background-image: radial-gradient(var(--border) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .device-frame { background: white; transition: 0.4s; box-shadow: 0 20px 50px rgba(0,0,0,0.5); position: relative;}
+        .mode-desktop { width: 100%; height: 100%; border: none; }
+        .mode-mobile { width: 375px; height: 667px; border: 10px solid #333; border-radius: 30px; }
+        .mode-tablet { width: 768px; height: 1024px; transform: scale(0.6); border: 12px solid #333; border-radius: 20px; }
+        iframe { width: 100%; height: 100%; border: none; background: white;}
+
+        /* Window Mode */
+        #window-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--glass); backdrop-filter: blur(12px);
+            z-index: 9999; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #window-overlay.active { display: flex; opacity: 1; }
+        .window-box {
+            width: 85%; height: 85%; background: #000; border-radius: 8px; border: 1px solid var(--border);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; overflow: hidden;
+            animation: popIn 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        .window-header { background: var(--bg-activity); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+
+        #status-bar { height: 25px; background: var(--accent); color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; font-size: 12px; z-index: 20; }
+        #ctx-menu {
+            position: absolute; display: none; background: var(--bg-sidebar); border: 1px solid var(--border);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); min-width: 150px; z-index: 1000;
+        }
+        .ctx-item { padding: 8px 15px; font-size: 13px; cursor: pointer; display: flex; justify-content: space-between; color: var(--text-main); }
+        .ctx-item:hover { background: var(--accent); color: white; }
+
+        @keyframes popIn { from{transform:scale(0.95) translateY(20px);} to{transform:scale(1) translateY(0);} }
+        @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+        
+        /* Pickr Customization */
+        .pcr-app { background: var(--bg-sidebar) !important; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important; border-radius: 8px !important; }
+        .pcr-interaction input { background: var(--bg-app) !important; color: white !important; border: 1px solid var(--border) !important; }
+        .pcr-button { border: 1px solid white; }
+    </style>
+</head>
+<body>
+
+    <div id="workbench">
+        <div id="activity-bar">
+            <div class="act-icon active" onmouseenter="playHover()" onclick="switchView('explorer')" title="Arquivos"><i class="far fa-copy"></i></div>
+            <div class="act-icon" onmouseenter="playHover()" onclick="switchView('settings')" title="Preferências"><i class="fas fa-sliders-h"></i></div>
+        </div>
+
+        <div id="sidebar">
+            <div id="view-explorer" class="sidebar-view active">
+                <div class="sb-header">
+                    <span>Projeto Coder</span>
+                    <div>
+                        <i class="fas fa-folder-open" onclick="openFolder()" style="cursor:pointer; margin-right:10px; transition:0.2s;" title="Abrir Pasta"></i>
+                        <i class="fas fa-file-medical" onclick="quickNewFile()" style="cursor:pointer; transition:0.2s;" title="Novo Arquivo"></i>
+                    </div>
+                </div>
+                <div id="file-tree" style="flex:1; overflow-y:auto;" oncontextmenu="handleGlobalCtx(event)">
+                    <div style="padding:30px 20px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
+                        <i class="fas fa-rocket" style="font-size:24px; margin-bottom:10px;"></i><br>
+                        Bem-vindo ao Coder v9.<br>Abra uma pasta local.
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-settings" class="sidebar-view">
+                <div class="sb-header">PREFERÊNCIAS</div>
+                <div class="config-block">
+                    <span class="config-title">Aparência</span>
+                    <select class="custom-select" onchange="setTheme(this.value)">
+                        <option value="">🌑 Default Dark</option>
+                        <option value="theme-dracula">🧛 Dracula</option>
+                        <option value="theme-nord">❄️ Nord</option>
+                        <option value="theme-cyber">🌃 Cyberpunk</option>
+                        <option value="theme-matrix">💻 Matrix</option>
+                        <option value="theme-light">☀️ GitHub Light</option>
+                    </select>
+                </div>
+                <div class="config-block">
+                    <span class="config-title">Som & ASMR</span>
+                    <select class="custom-select" id="sound-profile" onchange="changeSoundProfile(this.value)">
+                        <option value="mech">⌨️ Mecânico (Clicky)</option>
+                        <option value="bubble">🫧 Bubble (Confortável)</option>
+                        <option value="notebook">💻 Notebook (Suave)</option>
+                        <option value="retro">👾 Retro 8-bit</option>
+                    </select>
+                    <div class="toggle-row">
+                        <span>Som ao Digitar</span>
+                        <label class="toggle-switch"><input type="checkbox" id="chk-type" checked onchange="toggleAudio('type')"><span class="slider"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Som Mestre</span>
+                        <label class="toggle-switch"><input type="checkbox" id="chk-master" checked onchange="toggleAudio('master')"><span class="slider"></span></label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-area">
+            <div id="tabs-bar">
+                <div id="tabs-container" style="display:flex; height:100%;"></div>
+                <button class="btn-run" onmouseenter="playHover()" onclick="toggleRun()" title="Atalho: Ctrl + R">
+                    <i class="fas fa-play"></i> RUN
+                </button>
+            </div>
+
+            <div id="split-container">
+                <div id="editor-wrapper">
+                    <div id="ace-editor"></div>
+                    <div id="color-overlay" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;"></div>
+                </div>
+                <div id="preview-wrapper">
+                    <div style="padding:8px; background:var(--bg-sidebar); display:flex; justify-content:center; gap:15px; border-bottom:1px solid var(--border); align-items:center;">
+                        <i class="fas fa-desktop" onclick="setDevice('desktop')" title="Desktop" style="cursor:pointer; color:var(--text-muted)"></i>
+                        <i class="fas fa-tablet-alt" onclick="setDevice('tablet')" title="Tablet" style="cursor:pointer; color:var(--text-muted)"></i>
+                        <i class="fas fa-mobile-alt" onclick="setDevice('mobile')" title="Mobile" style="cursor:pointer; color:var(--text-muted)"></i>
+                        <div style="width:1px; height:15px; background:var(--border); margin:0 5px;"></div>
+                        <i class="fas fa-expand" onclick="openWindowMode()" title="Modo Cinema" style="cursor:pointer; color:var(--accent)"></i>
+                        <i class="fas fa-times" onclick="toggleRun()" title="Fechar" style="cursor:pointer; color:#ff5555; margin-left:10px;"></i>
+                    </div>
+                    <div class="device-stage">
+                        <div id="device-frame" class="device-frame mode-desktop">
+                            <iframe id="preview-frame"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="window-overlay">
+        <div class="window-box">
+            <div class="window-header">
+                <span style="font-weight:bold; color:white; font-size:14px;"><i class="fas fa-globe"></i> WEBVIEW PRO</span>
+                <div style="display:flex; gap:15px;">
+                    <i class="fas fa-expand-arrows-alt" onclick="goFullscreen()" title="Tela Cheia" style="cursor:pointer; color:#ccc;"></i>
+                    <i class="fas fa-times" onclick="closeWindowMode()" title="Fechar" style="cursor:pointer; color:#ff5555;"></i>
+                </div>
+            </div>
+            <iframe id="window-frame" style="flex:1; width:100%; height:100%; border:none; background:white;"></iframe>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        <span><i class="fas fa-code-branch"></i> main</span>
+        <span id="msg-toast">Coder v9.0 Ultimate</span>
+        <span id="file-lang">TXT</span>
+    </div>
+
+    <div id="ctx-menu">
+        <div class="ctx-item" onclick="createItem('file')">Novo Arquivo</div>
+        <div class="ctx-item" onclick="createItem('folder')">Nova Pasta</div>
+        <div class="ctx-item" onclick="deleteItem()" style="color:#ff5555">Excluir</div>
+    </div>
+    
+    <div id="pickr-anchor" style="position:absolute; visibility:hidden;"></div>
+
+    <script>
+        // --- 1. AUDIO ENGINE ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const sounds = { master: true, type: true };
+        const soundProfiles = {
+            mech: { type: 'square', freqBase: 600, decay: 0.05, vol: 0.05 },
+            bubble: { type: 'sine', freqBase: 300, decay: 0.15, vol: 0.1 },
+            notebook: { type: 'triangle', freqBase: 800, decay: 0.03, vol: 0.03 },
+            retro: { type: 'sawtooth', freqBase: 150, decay: 0.1, vol: 0.04 }
+        };
+        let currentProfile = soundProfiles.mech;
+
+        function changeSoundProfile(val) { currentProfile = soundProfiles[val]; playType(); }
+        function playTone(freq, type, duration, vol) {
+            if(!sounds.master) return;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+        function playType() { 
+            if(sounds.type) { const f = currentProfile.freqBase + (Math.random() * 50); playTone(f, currentProfile.type, currentProfile.decay, currentProfile.vol); }
+        }
+        function playHover() { if(sounds.master) playTone(200, 'sine', 0.1, 0.02); }
+        function playSuccess() { if(sounds.master) { playTone(440, 'sine', 0.1, 0.05); setTimeout(()=>playTone(880,'sine',0.2,0.05), 100); } }
+        function toggleAudio(s) { sounds[s] = document.getElementById('chk-'+s).checked; }
+
+        // --- 2. EDITOR SETUP ---
+        const editor = ace.edit("ace-editor");
+        editor.setTheme("ace/theme/tomorrow_night");
+        editor.session.setMode("ace/mode/text");
+        editor.setFontSize(14);
+        editor.setOptions({ enableLiveAutocompletion: true, fontFamily: "Consolas, monospace", scrollPastEnd: 0.5 });
+        
+        // --- 2.1 PRO COLOR PICKER (Pickr Integration) ---
+        let pickrInstance = null;
+        let activeColorRange = null;
+
+        // Inicializa o Pickr (apenas uma vez)
+        window.addEventListener('load', () => {
+            pickrInstance = Pickr.create({
+                el: '#pickr-anchor',
+                theme: 'monolith', // Tema similar ao VS Code
+                useAsButton: false,
+                default: '#42445a',
+                components: {
+                    preview: true,
+                    opacity: true,
+                    hue: true,
+                    interaction: {
+                        hex: true,
+                        rgba: true,
+                        hsla: true,
+                        input: true,
+                        save: true
+                    }
+                }
+            });
+
+            // Quando o usuário muda a cor no seletor
+            pickrInstance.on('change', (color, source, instance) => {
+                if(activeColorRange) {
+                    const mode = color.getAlpha() < 1 ? 'RGBA' : 'HEX';
+                    let newVal = mode === 'RGBA' ? color.toRGBA().toString(0) : color.toHEXA().toString();
+                    
+                    // Replace no editor em tempo real
+                    editor.session.replace(activeColorRange, newVal);
+                    
+                    // Atualiza o range porque o tamanho do texto mudou (ex: #fff -> rgba(255,255,255,1))
+                    const startRow = activeColorRange.start.row;
+                    const startCol = activeColorRange.start.column;
+                    activeColorRange = new ace.Range(startRow, startCol, startRow, startCol + newVal.length);
+                }
+            });
+            
+            // Re-escaneia cores após fechar para garantir integridade
+            pickrInstance.on('hide', () => {
+                updateColorMarkers();
+            });
+        });
+
+        editor.renderer.on('afterRender', updateColorMarkers);
+        editor.session.on('change', () => { playType(); updateColorMarkers(); });
+        
+        function updateColorMarkers() {
+            const container = document.getElementById('color-overlay');
+            container.innerHTML = '';
+            
+            // Regex que pega Hex, RGB, RGBA e HSL
+            const regex = /(?:#(?:\d{3}){1,2}|rgba?\([^)]+\)|hsla?\([^)]+\))\b/g;
+            const lines = editor.session.getDocument().getAllLines();
+            const firstRow = editor.renderer.getFirstVisibleRow();
+            const lastRow = editor.renderer.getLastVisibleRow();
+
+            for (let r = firstRow; r <= lastRow; r++) {
+                const line = lines[r];
+                if (!line) continue;
+                let match;
+                while ((match = regex.exec(line)) !== null) {
+                    const colorStr = match[0];
+                    const startCol = match.index;
+                    const endCol = match.index + colorStr.length;
+                    
+                    const pos = editor.renderer.textToScreenCoordinates(r, startCol);
+                    const wrapperRect = document.getElementById('editor-wrapper').getBoundingClientRect();
+                    
+                    const el = document.createElement('div');
+                    el.className = 'color-marker';
+                    el.style.backgroundColor = colorStr;
+                    el.style.top = (pos.pageY - wrapperRect.top) + 'px';
+                    el.style.left = (pos.pageX - wrapperRect.left - 14) + 'px'; 
+                    el.style.pointerEvents = 'auto';
+                    
+                    el.onclick = (e) => {
+                        e.stopPropagation();
+                        activeColorRange = new ace.Range(r, startCol, r, endCol);
+                        
+                        // Posiciona e abre o Pickr
+                        pickrInstance.setColor(colorStr);
+                        
+                        // Hack visual para mover o popover para onde clicamos
+                        const pickrApp = document.querySelector('.pcr-app');
+                        if(pickrApp) {
+                            pickrApp.style.position = 'fixed';
+                            pickrApp.style.top = (e.clientY + 20) + 'px';
+                            pickrApp.style.left = e.clientX + 'px';
+                        }
+                        pickrInstance.show();
+                    };
+                    container.appendChild(el);
+                }
+            }
+        }
+
+        // --- 3. CORE LOGIC ---
+        // Atalhos
+        editor.commands.addCommand({ name: 'save', bindKey: {win:'Ctrl-S', mac:'Command-S'}, exec: ()=>saveFile() });
+        editor.commands.addCommand({ name: 'undo', bindKey: {win:'Ctrl-Z', mac:'Command-Z'}, exec: ()=>editor.undo() });
+        editor.commands.addCommand({ name: 'redo', bindKey: {win:'Ctrl-Y', mac:'Command-Y'}, exec: ()=>editor.redo() });
+        window.addEventListener('keydown', (e) => {
+            if((e.ctrlKey||e.metaKey) && e.key === 'r') { e.preventDefault(); toggleRun(); }
+            if((e.ctrlKey||e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); }
+        });
+
+        // Filesystem
+        let rootHandle=null, fileMap=new Map(), currentFile=null, isRunMode=false, ctxTarget=null;
+
+        async function openFolder() { try { rootHandle = await window.showDirectoryPicker(); playSuccess(); refreshTree(); } catch(e){} }
+        
+        async function refreshTree() {
+            if(!rootHandle) return;
+            const tree = document.getElementById('file-tree'); tree.innerHTML='';
+            const root = document.createElement('div');
+            root.innerHTML = `<div style="padding:5px 10px; font-weight:bold; color:var(--text-main);"><i class="fas fa-angle-down"></i> ${rootHandle.name.toUpperCase()}</div>`;
+            tree.appendChild(root);
+            await readDir(rootHandle, tree, 1);
+        }
+        
+        async function readDir(dirHandle, parent, level) {
+            const entries = [];
+            for await (const entry of dirHandle.values()) entries.push(entry);
+            entries.sort((a,b)=>(a.kind===b.kind ? a.name.localeCompare(b.name) : a.kind==='directory' ? -1 : 1));
+            for(const entry of entries) {
+                const id = Math.random().toString(36).substr(2,9);
+                fileMap.set(id, {handle:entry, parent:dirHandle});
+                const div = document.createElement('div'); div.style.paddingLeft=(level*15)+'px';
+                if(entry.kind === 'directory') {
+                    div.innerHTML = `<div class="file-entry" onclick="toggleDir('${id}',this)" oncontextmenu="ctx(event,'${id}')"><i class="fas fa-folder" style="color:#dcb67a; margin-right:8px;"></i>${entry.name}</div><div id="sub-${id}" style="display:none"></div>`;
+                    parent.appendChild(div);
+                    await readDir(entry, div.querySelector(`#sub-${id}`), level+1);
+                } else {
+                    div.innerHTML = `<div class="file-entry" onclick="loadFile('${id}')" oncontextmenu="ctx(event,'${id}')"><i class="fas ${getIcon(entry.name)}" style="margin-right:8px;"></i>${entry.name}</div>`;
+                    parent.appendChild(div);
+                }
+            }
+        }
+        function toggleDir(id, el) {
+            const sub = document.getElementById('sub-'+id); const icon = el.querySelector('i');
+            if(sub.style.display==='none'){ sub.style.display='block'; icon.className='fas fa-folder-open'; }
+            else { sub.style.display='none'; icon.className='fas fa-folder'; }
+        }
+        function getIcon(name) {
+            const n = name.toLowerCase();
+            if(n.endsWith('.html')) return 'fa-html5'; if(n.endsWith('.css')) return 'fa-css3-alt';
+            if(n.endsWith('.js')) return 'fa-js'; if(n.endsWith('.py')) return 'fa-python';
+            if(n.endsWith('.json')) return 'fa-file-code'; if(n.endsWith('.txt')) return 'fa-file-lines';
+            return 'fa-file';
+        }
+
+        async function loadFile(id) {
+            const data = fileMap.get(id); if(!data) return;
+            currentFile = data.handle; const f = await currentFile.getFile();
+            editor.setValue(await f.text(), -1);
+            
+            const n = currentFile.name.toLowerCase();
+            let mode = 'text';
+            if(n.endsWith('.html')) mode='html'; if(n.endsWith('.css')) mode='css';
+            if(n.endsWith('.js')) mode='javascript'; if(n.endsWith('.json')) mode='json';
+            
+            editor.session.setMode("ace/mode/"+mode);
+            document.getElementById('file-lang').innerText = mode.toUpperCase();
+            document.getElementById('tabs-container').innerHTML = `<div class="tab active"><i class="fas ${getIcon(n)}" style="margin-right:5px"></i> ${n}</div>`;
+            if(isRunMode && mode==='html') updatePreview();
+        }
+
+        async function saveFile() {
+            if(!currentFile) return;
+            const w = await currentFile.createWritable(); await w.write(editor.getValue()); await w.close();
+            const t = document.getElementById('msg-toast'); t.innerText="Salvo!"; t.style.color="var(--run-color)";
+            setTimeout(()=>{t.innerText="Coder v9.0"; t.style.color="white";},2000);
+            if(isRunMode) updatePreview();
+        }
+
+        // Run Controls
+        function toggleRun() {
+            isRunMode = !isRunMode;
+            const b = document.querySelector('.btn-run');
+            if(isRunMode) {
+                playSuccess(); document.body.classList.add('run-mode');
+                b.innerHTML='<i class="fas fa-stop"></i> STOP'; 
+                updatePreview();
+            } else {
+                document.body.classList.remove('run-mode');
+                b.innerHTML='<i class="fas fa-play"></i> RUN'; 
+                updatePreview();
+            }
+            setTimeout(()=>editor.resize(), 300);
+        }
+        function updatePreview() {
+            const c = editor.getValue();
+            document.getElementById('preview-frame').srcdoc = c;
+            document.getElementById('window-frame').srcdoc = c;
+        }
+        function setDevice(mode) { document.getElementById('device-frame').className = 'device-frame mode-'+mode; }
+        
+        function openWindowMode() { document.getElementById('window-overlay').classList.add('active'); updatePreview(); playHover(); }
+        function closeWindowMode() { document.getElementById('window-overlay').classList.remove('active'); }
+        function goFullscreen() { const e = document.getElementById('window-frame'); if(e.requestFullscreen)e.requestFullscreen(); }
+
+        // UI & Theme
+        function switchView(view) {
+            document.querySelectorAll('.sidebar-view').forEach(v=>v.classList.remove('active'));
+            document.getElementById('view-'+view).classList.add('active');
+            document.querySelectorAll('.act-icon').forEach(i=>i.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+        function setTheme(c) {
+            document.body.className = isRunMode ? 'run-mode '+c : c;
+            if(c.includes('light')) editor.setTheme("ace/theme/chrome");
+            else if(c.includes('dracula')) editor.setTheme("ace/theme/dracula");
+            else if(c.includes('nord')) editor.setTheme("ace/theme/nord_dark");
+            else if(c.includes('matrix')) editor.setTheme("ace/theme/terminal");
+            else editor.setTheme("ace/theme/tomorrow_night");
+        }
+
+        // Context Menu
+        function handleGlobalCtx(e) { if(e.target.id==='file-tree') ctx(e,null); }
+        function ctx(e,id) { e.preventDefault(); e.stopPropagation(); ctxTarget=id; const m=document.getElementById('ctx-menu'); m.style.display='block'; m.style.left=e.pageX+'px'; m.style.top=e.pageY+'px'; }
+        document.addEventListener('click', ()=>document.getElementById('ctx-menu').style.display='none');
+        async function createItem(t) {
+            let p = rootHandle; if(ctxTarget) { const i=fileMap.get(ctxTarget); p=i.handle.kind==='directory'?i.handle:i.parent; }
+            if(!p) return alert("Abra uma pasta"); const n=prompt("Nome:"); if(!n) return;
+            if(t==='file') await p.getFileHandle(n,{create:true}); else await p.getDirectoryHandle(n,{create:true});
+            refreshTree();
+        }
+        async function quickNewFile() { if(!rootHandle) return; const n=prompt("Nome:"); if(n){await rootHandle.getFileHandle(n,{create:true}); refreshTree();} }
+        async function deleteItem() { if(!ctxTarget) return; const i=fileMap.get(ctxTarget); if(confirm("Apagar?")) { await i.parent.removeEntry(i.handle.name,{recursive:true}); refreshTree(); editor.setValue(""); }}
+
+    </script>
+</body>
+</html>
